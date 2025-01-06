@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
+from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose, concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import mse
 from tensorflow.keras.callbacks import EarlyStopping
@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 import os
 import matplotlib.pyplot as plt
+
 
 # Custom callback for prediction evolution
 class PredictionCallback(tf.keras.callbacks.Callback):
@@ -76,10 +77,11 @@ def plot_prediction_evolution(predictions_history, actual_values, zonal_wind_idx
 
 # Model setup
 latent_dim = 512
+cond_dim = 4
 model_weights_path = r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' 
 
 # Load and preprocess data
-F = np.load(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' )
+F = np.load(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\SHORT-main\holton_mass_essentials\Sample_data\150k_Long_run\x_stoch.npy')
 psi = F[3500:, 0, :]
 
 # Normalize data
@@ -88,9 +90,9 @@ std_psi = np.std(psi, axis=0, keepdims=True)
 psi = (psi - mean_psi) / std_psi
 
 # Data preparation
-train_size = 10000
+train_size = 200000
 val_size = 5000  # Dedicated validation set size
-test_time = 1500  # Test set size
+test_time = 15000  # Test set size
 lead = 1
 
 # Define indices for splitting
@@ -132,6 +134,8 @@ print(f"Initial point shape: {initial_point.shape}")
 #Actually Define the Model
 # Encoder
 input_data = Input(shape=(75, 1))  # Input shape (time_steps, channels)
+cond = Input(shape=(cond_dim,), name="condition")  # Conditional input
+
 encoder = Convolution1D(64, 3, activation='relu', padding='same')(input_data)
 encoder = MaxPooling1D(2)(encoder)  # Downsample: (75 -> 38)
 encoder = Convolution1D(64, 3, activation='relu', padding='same')(encoder)
@@ -151,6 +155,8 @@ def sample_latent_features(distribution):
     return mean + tf.exp(0.5 * variance) * random
 
 latent_encoding = Lambda(sample_latent_features)([distribution_mean, distribution_variance])
+
+latent_encoding_conditioned = concatenate([latent_encoding, cond], axis=-1)
 
 # Decoder
 decoder_input = Input(shape=(latent_dim,))
@@ -297,7 +303,7 @@ plt.show()
 
 
 # Save results
-np.savez(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' ,
+np.savez(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\predictions.npz',
          predictions=pred_mean, mean_psi=mean_psi, std_psi=std_psi, actual_values=actual_values)
 # Plot training history if available
 try:
