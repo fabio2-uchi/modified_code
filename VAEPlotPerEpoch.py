@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
+from tensorflow.keras.layers import Input, Dense, Lambda, concatenate, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import mse
 from tensorflow.keras.callbacks import EarlyStopping
@@ -76,10 +76,10 @@ def plot_prediction_evolution(predictions_history, actual_values, zonal_wind_idx
 
 # Model setup
 latent_dim = 512
-model_weights_path = r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' 
+model_weights_path = r'C:\Users\danie\OneDrive\Desktop\Holton Mass Model\Stochastic-VAE-for-Digital-Twins\model_weights.weights.h5'
 
 # Load and preprocess data
-F = np.load(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' )
+F = np.load(r'C:\Users\danie\OneDrive\Desktop\Holton Mass Model\Stochastic-VAE-for-Digital-Twins\x_stoch.npy')
 psi = F[3500:, 0, :]
 
 # Normalize data
@@ -131,7 +131,7 @@ print(f"Initial point shape: {initial_point.shape}")
 
 #Actually Define the Model
 # Encoder
-input_data = Input(shape=(75, 1))  # Input shape (time_steps, channels)
+input_data = Input(shape=(latent_dim, 1))  # Input shape (time_steps, channels)
 encoder = Convolution1D(64, 3, activation='relu', padding='same')(input_data)
 encoder = MaxPooling1D(2)(encoder)  # Downsample: (75 -> 38)
 encoder = Convolution1D(64, 3, activation='relu', padding='same')(encoder)
@@ -150,12 +150,18 @@ def sample_latent_features(distribution):
     random = tf.keras.backend.random_normal(shape=(batch_size, tf.shape(variance)[1]))
     return mean + tf.exp(0.5 * variance) * random
 
+print(f"Latent Dim Shape: {latent_dim}")
+
 latent_encoding = Lambda(sample_latent_features)([distribution_mean, distribution_variance])
+cond = encoder
+latent_encoding_conditioned = concatenate([latent_encoding, cond], axis = 1)
 
 # Decoder
-decoder_input = Input(shape=(latent_dim,))
-decoder = Dense(10 * 64, activation='relu')(decoder_input)  # Match flattened encoder output
-decoder = Reshape((10, 64))(decoder)  # Reshape to (time_steps, channels)
+decoder_input = Input(shape=(latent_dim + 75,))  # Latent dimensions + auxiliary input
+decoder = Dense(10 * 64, activation='relu')(decoder_input)  # Fully connected layer to expand dimensions
+decoder = Reshape((10, 64))(decoder)  # Reshape to 3D tensor (10 time_steps, 64 channels)
+
+# Transposed Convolutional Layers + Upsampling
 decoder = Conv1DTranspose(64, 3, activation='relu', padding='same')(decoder)
 decoder = UpSampling1D(2)(decoder)  # Upsample: (10 -> 20)
 decoder = Conv1DTranspose(64, 3, activation='relu', padding='same')(decoder)
@@ -168,7 +174,7 @@ decoder_output = Lambda(lambda x: x[:, :75, :])(decoder)
 decoder_output = Conv1DTranspose(1, 3, activation='linear', padding='same')(decoder_output)  # Final output shape (75, 1)
 
 # Build Models
-encoder_model = Model(input_data, [latent_encoding, distribution_mean, distribution_variance], name="Encoder")
+encoder_model = Model(input_data, [latent_encoding_conditioned, distribution_mean, distribution_variance], name="Encoder")
 decoder_model = Model(decoder_input, decoder_output, name="Decoder")
 
 # Define combined VAE model
@@ -251,11 +257,13 @@ sig_m = 0
 std_psi = std_psi.reshape(1, 75)  # (1, 75)
 mean_psi = mean_psi.reshape(1, 75)  # (1, 75)
 
+
+
 # Inference loop with proper normalization
 for k in tqdm(range(test_time), desc="Inference Progress"):
     latent_encoding, _, _ = encoder_model.predict(initial_point, verbose=0)
-    noise = np.random.normal(0, sig_m, (ens, latent_dim))
-    z_batch = latent_encoding + noise
+    random = np.random.multivariate_normal(np.zeros(latent_dim),np.eye(latent_dim))
+    z_batch = distribution_mean + np.exp(0.5 * distribution_variance) * random
     pred_ens = decoder_model.predict(z_batch, batch_size=ens, verbose=0)
     pred_step = np.mean(pred_ens, axis=0).reshape(75, 1)
     pred_mean[k, :, :] = pred_step
@@ -297,7 +305,7 @@ plt.show()
 
 
 # Save results
-np.savez(r'C:\Users\Fabio Ventura\Desktop\WORK_STUFF\SHORT-main_V2\model\model_weights.weights.h5' ,
+np.savez(r'C:\Users\danie\OneDrive\Desktop\Holton Mass Model\Stochastic-VAE-for-Digital-Twins\predictions.npz',
          predictions=pred_mean, mean_psi=mean_psi, std_psi=std_psi, actual_values=actual_values)
 # Plot training history if available
 try:
