@@ -160,6 +160,7 @@ latent_encoding_conditioned = concatenate([latent_encoding, cond], axis = 1)
 decoder_input = Input(shape=(latent_dim + 75,))  # Latent dimensions + auxiliary input
 decoder = Dense(10 * 64, activation='relu')(decoder_input)  # Fully connected layer to expand dimensions
 decoder = Reshape((10, 64))(decoder)  # Reshape to 3D tensor (10 time_steps, 64 channels)
+#change
 
 # Transposed Convolutional Layers + Upsampling
 decoder = Conv1DTranspose(64, 3, activation='relu', padding='same')(decoder)
