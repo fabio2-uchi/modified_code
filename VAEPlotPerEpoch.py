@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Input, Dense, Lambda, concatenate, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
+from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
 from tensorflow.keras.models import Model
 from tensorflow.keras.losses import mse
 from tensorflow.keras.callbacks import EarlyStopping
@@ -74,14 +74,26 @@ def plot_prediction_evolution(predictions_history, actual_values, zonal_wind_idx
         plt.savefig('prediction_evolution.png')
         plt.show()
 
+# GPU initialization
+gpus = tf.config.list_physical_devices('GPU')
+if gpus: 
+    tf.config.set_logical_device_configuration(
+        gpus[0],
+        [tf.config.LogicalDeviceConfiguration(memory_limit=5600)]
+    )
+
+logical_gpus = tf.config.list_logical_devices('GPU')
+print(len(gpus), "Physical GPU,", len(logical_gpus), "Logical GPUs")
+
 # Model setup
 latent_dim = 512
-model_weights_path = r'C:\Users\danie\OneDrive\Desktop\Holton Mass Model\Stochastic-VAE-for-Digital-Twins\model_weights.weights.h5'
+model_weights_path = r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified_code-main/model.weights.h5' 
 
 # Load and preprocess data
-F = np.load(r'C:\Users\danie\OneDrive\Desktop\Holton Mass Model\Stochastic-VAE-for-Digital-Twins\x_stoch.npy')
-psi = F[3500:, 0, :]
-
+F = np.load(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified_code-main/stochastic_trajectory.npy' )
+print(F.shape)
+psi = F[3500:, 0, :] ## 0 is the index of the variable we want to predict / Don't forget to read "3500"
+print(psi.shape)
 # Normalize data
 mean_psi = np.mean(psi, axis=0, keepdims=True)
 std_psi = np.std(psi, axis=0, keepdims=True)
