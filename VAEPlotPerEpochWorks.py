@@ -1,7 +1,9 @@
-from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
-from tensorflow.keras.models import Model
-from tensorflow.keras.losses import mse
-from tensorflow.keras.callbacks import EarlyStopping
+
+from keras.api.layers import Input, Dense, Lambda, Layer, Convolution1D, MaxPooling1D, Flatten, Reshape, UpSampling1D, Conv1DTranspose
+from keras.api.models import Model
+from keras._tf_keras.keras.losses import mse
+from keras.api.callbacks import EarlyStopping
+from keras.api.callbacks import History
 from tqdm import tqdm
 import numpy as np
 import tensorflow as tf
@@ -28,8 +30,8 @@ class PredictionCallback(tf.keras.callbacks.Callback):
         # Add labeled progress bar
         for k in tqdm(range(self.test_time), desc=f"Epoch {epoch + 1} Prediction Progress"):
             try:
-                latent_encoding, _, _ = self.encoder_model.predict(initial, verbose=0)
-                pred_ens = self.decoder_model.predict(latent_encoding, verbose=0)
+                latent_encoding, _, _ = self.encoder_model.predict_step(initial)
+                pred_ens = self.decoder_model.predict_step(latent_encoding)
                 pred_step = np.mean(pred_ens, axis=0).reshape(75, 1)
                 pred_mean[k, :, :] = pred_step
                 pred_denorm = (pred_step.squeeze() * self.std_psi + self.mean_psi).reshape(1, 75, 1)
@@ -83,7 +85,7 @@ print(len(gpus), "Physical GPU,", len(logical_gpus), "Logical GPUs")
 
 # Model setup
 latent_dim = 512
-model_weights_path = r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/model_weights.weights.h5' 
+model_weights_path = r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/3ep-jan12th/model_weights.weights.h5' 
 # Load and preprocess data
 F = np.load(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/x_stoch.npy' )
 psi = F[3500:, 0, :]
@@ -138,7 +140,7 @@ encoder = Flatten()(encoder)
 # Latent space
 distribution_mean = Dense(latent_dim, name='mean')(encoder)
 distribution_variance = Dense(latent_dim, name='log_variance')(encoder)
-def sample_latent_features(distribution):
+def sample_latent_features(distribution, random=0):
     mean, variance = distribution
     batch_size = tf.shape(variance)[0]
     random = tf.keras.backend.random_normal(shape=(batch_size, tf.shape(variance)[1]))
@@ -187,6 +189,8 @@ vae_with_loss = Model(inputs=[input_data, y_true], outputs=total_loss_layer)
 vae_with_loss.compile(optimizer='adam', loss=lambda y_true, y_pred: y_pred, run_eagerly=True)
 # Set up callbacks
 pred_callback = PredictionCallback(encoder_model, decoder_model, initial_point, test_time, mean_psi, std_psi, actual_values)
+# Set up val_loss monitoring
+history = None
 # Training and prediction evolution
 if os.path.exists(model_weights_path):
     vae_with_loss.load_weights(model_weights_path)
@@ -199,14 +203,14 @@ else:
     [psi_input_Tr, psi_label_Tr],
     np.zeros((psi_input_Tr.shape[0], 1)),  # Dummy target for custom loss
     validation_data=([psi_input_val, psi_label_val], np.zeros((psi_input_val.shape[0], 1))),
-    batch_size=12000,
-    epochs=100,
+    batch_size=4096,
+    epochs=3,
     shuffle=True,
-    callbacks=[pred_callback, EarlyStopping(monitor='val_loss', patience=5)],
+    callbacks=[pred_callback, EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
 )
-    
     vae_with_loss.save_weights(model_weights_path)
     print(f"Model weights saved to {model_weights_path}.")
+    
     
 # Save loss history for plotting
 try:
@@ -229,10 +233,8 @@ std_psi = std_psi.reshape(1, 75)  # (1, 75)
 mean_psi = mean_psi.reshape(1, 75)  # (1, 75)
 # Inference loop with proper normalization
 for k in tqdm(range(test_time), desc="Inference Progress"):
-    latent_encoding, _, _ = encoder_model.predict(initial_point, verbose=0)
-    random = np.random.multivariate_normal(np.zeros(latent_dim),np.eye(latent_dim))
-    z_batch = distribution_mean + np.exp(0.5 * distribution_variance) * random
-    pred_ens = decoder_model.predict(z_batch, batch_size=ens, verbose=0)
+    latent_encoding, _, _ = encoder_model.predict_step(initial_point)
+    pred_ens = decoder_model.predict_step(latent_encoding)
     pred_step = np.mean(pred_ens, axis=0).reshape(75, 1)
     pred_mean[k, :, :] = pred_step
     # Denormalize current prediction before using as next input
@@ -265,7 +267,7 @@ plt.grid(True)
 plt.savefig('predictions_vs_actual.png')
 plt.show()
 # Save results
-np.savez(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/model_weights.weights.h5' ,
+np.savez(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/3ep-jan12th/model_weights.weights.h5' ,
          predictions=pred_mean, mean_psi=mean_psi, std_psi=std_psi, actual_values=actual_values)
 # Plot training history if available
 try:
