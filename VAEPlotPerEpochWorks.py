@@ -231,7 +231,8 @@ mean_psi = mean_psi.reshape(1, 75)  # (1, 75)
 for k in tqdm(range(test_time), desc="Inference Progress"):
     latent_encoding, _, _ = encoder_model.predict(initial_point, verbose=0)
     random = np.random.multivariate_normal(np.zeros(latent_dim),np.eye(latent_dim))
-    z_batch = distribution_mean + np.exp(0.5 * distribution_variance) * random
+    distribution_variance_exp = Lambda(tf.exp)(distribution_variance*.5)
+    z_batch =  distribution_mean + distribution_variance + random
     pred_ens = decoder_model.predict(z_batch, batch_size=ens, verbose=0)
     pred_step = np.mean(pred_ens, axis=0).reshape(75, 1)
     pred_mean[k, :, :] = pred_step
