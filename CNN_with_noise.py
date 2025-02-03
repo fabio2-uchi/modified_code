@@ -13,27 +13,27 @@ from torch.utils.data import TensorDataset, DataLoader, Dataset
 import numpy as np
 import matplotlib.pyplot as plt; plt.rcParams['figure.dpi'] = 200
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+torch.cuda.empty_cache()
 
 # Model setup
-latent_dim = 512
 model_weights_path = r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/100ep-jan10th/model_weights.weights.h5' 
+
 # Load and preprocess data
 F = np.load(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/x_stoch.npy' )
 psi = F[3500:, 0, :]
+
 # Normalize data
 mean_psi = np.mean(psi, axis=0, keepdims=True)
 std_psi = np.std(psi, axis=0, keepdims=True)
 psi = (psi - mean_psi) / std_psi
+
 # Data preparation
 train_size = 100000
 val_size = 20000  # Dedicated validation set size
 test_time = 1500
 
-# Latent dims
-latent_dims = 75
-
-# Test set size
 lead = 1
+
 # Splitting indices
 train_end = train_size
 val_start = train_end
@@ -52,40 +52,40 @@ psi_label_val = reshape_data(psi[val_start + lead:val_end + lead, :])
 test_size = int(0.5 * psi.shape[0])
 psi_test_input = reshape_data(psi[val_end:val_end + test_size, :])
 psi_test_label = reshape_data(psi[val_end + lead:val_end + lead + test_size, :])
-#Actually Define the Model
 
-class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims):
-        super(VariationalEncoder, self).__init__()
-        self.linear1 = nn.Linear(latent_dims, 150)
-        self.linear2 = nn.Linear(150, 100)
-        self.linear3 = nn.Linear(100, latent_dims)
-        self.linear4 = nn.Linear(100, latent_dims)
+noise_train = np.random.normal(psi_input_Tr)
+noise_val = np.random.normal(psi_input_val)
+noise_test = np.random.normal(psi_test_input)
 
-        self.kl = 0
-        self.N = torch.distributions.Normal(0, 1)
+class AtmosphereDataset(torch.utils.data.Dataset):
+    def __init__(self, inputs, labels):
 
-    def forward(self, x):
-        x = torch.flatten(x, start_dim=1)
-
-        x = self.linear1(x).relu()
-        x = self.linear2(x).relu()
-
-        mu =  self.linear3(x)
-        log_var = self.linear4(x)
-
-        std = torch.exp(0.5 * log_var)
-        noise = self.N.sample(mu.shape).to(mu.device)
-        z = mu + std * noise
+        self.inputs = torch.tensor(inputs, dtype=torch.float32)
+        self.labels = torch.tensor(labels, dtype=torch.float32)
         
-        self.kl = (-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())) / x.size(0)
+    def __len__(self):
+        return len(self.inputs)
 
-        return z
+    def __getitem__(self, idx):
+        return self.inputs[idx], self.labels[idx]
     
-class Decoder(nn.Module):
-    def __init__(self, latent_dims):
-        super(Decoder, self).__init__()
-        self.linear1 = nn.Linear(latent_dims, 100)
+#data loaders
+train_dataset = AtmosphereDataset(psi_input_Tr + noise_train, psi_label_Tr)
+val_dataset = AtmosphereDataset(psi_input_val + noise_val, psi_label_val)
+test_dataset = AtmosphereDataset(psi_test_input + noise_test, psi_test_label)
+
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True)
+val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=128, shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
+
+### Defining the CNN model
+
+class CNN(nn.Module):
+    def __init__(self, noise_std = 0.1):
+        super(CNN, self).__init__()
+
+        self.noise_std = noise_std
+        self.linear1 = nn.Linear(75, 100)
         self.linear2 = nn.Linear(100, 150)
         self.linear3 = nn.Linear(150, 75)
 
@@ -95,47 +95,16 @@ class Decoder(nn.Module):
         z = self.linear3(z)
         return z
 
-class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims):
-        super(VariationalAutoencoder, self).__init__()
-        self.encoder = VariationalEncoder(latent_dims)
-        self.decoder = Decoder(latent_dims)
+model = CNN()
+loss_fn = nn.MSELoss()
 
-    def forward(self, x):
-        z = self.encoder(x)
-        return self.decoder(z)
+def train(cnn, train_loader, val_loader, epochs=5):
 
-### Model Training
-# Create DataLoader for training
-
-class AtmosphereDataset(torch.utils.data.Dataset):
-    def __init__(self, inputs, labels):
-        self.inputs = torch.tensor(inputs, dtype=torch.float32)
-        self.labels = torch.tensor(labels, dtype=torch.float32)
-
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, idx):
-        return self.inputs[idx], self.labels[idx]
-    
-#data loaders
-train_dataset = AtmosphereDataset(psi_input_Tr, psi_label_Tr)
-val_dataset = AtmosphereDataset(psi_input_val, psi_label_val)
-test_dataset = AtmosphereDataset(psi_test_input, psi_test_label)
-
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True)
-val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=128, shuffle=False)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
-
-
-def train(autoencoder, train_loader, val_loader, epochs=5):
-
-    opt = torch.optim.Adam(autoencoder.parameters(), lr = 0.001)
+    opt = torch.optim.Adam(cnn.parameters(), lr = 0.001)
 
     for e in range(epochs):
 
-        autoencoder.train()
+        cnn.train()
         train_loss = 0.0
         min_valid_loss = np.inf
 
@@ -145,11 +114,9 @@ def train(autoencoder, train_loader, val_loader, epochs=5):
             opt.zero_grad()
             
             # Get reconstruction, mu, and log_var from the autoencoder.
-            x_hat = autoencoder(x)
+            x_hat = cnn(x)
 
-            recon_loss = ((x_hat - y) ** 2).sum() / x.size(0)
-            kl_loss = autoencoder.encoder.kl
-            loss = recon_loss + kl_loss
+            loss = ((x_hat - y) ** 2).sum() / x.size(0)
 
             loss.backward()
             opt.step()
@@ -158,15 +125,14 @@ def train(autoencoder, train_loader, val_loader, epochs=5):
 
         print("Training", train_loss)
     
-        autoencoder.eval()
+        cnn.eval()
         valid_loss = 0.0
         
         for x, y in val_loader:
             x = x.to(device)
             y = y.to(device)
-            x_hat = autoencoder(x)
-            recon_loss_val = ((x_hat - y) ** 2).sum() / x.size(0)
-            valid_loss += (recon_loss_val + autoencoder.encoder.kl).item()
+            x_hat = cnn(x)
+            valid_loss = ((x_hat - y) ** 2).sum() / x.size(0)
             
         print("Valid", valid_loss)
 
@@ -179,8 +145,8 @@ def train(autoencoder, train_loader, val_loader, epochs=5):
             min_valid_loss = valid_loss
             
             # Saving State Dict
-            torch.save(autoencoder.state_dict(), 'saved_model.pth')
-    return autoencoder
+            torch.save(cnn.state_dict(), 'saved_model.pth')
+    return cnn
     
 def evaluate_model(model, test_loader, std_psi, mean_psi):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -230,25 +196,75 @@ def plot_predictions(predictions, ground_truth, variable_idx=63):
     plt.grid(True)
     plt.show()
 
+psi = F[3500:, 1, :]
 
+# Normalize data
+mean_psi = np.mean(psi, axis=0, keepdims=True)
+std_psi = np.std(psi, axis=0, keepdims=True)
+psi = (psi - mean_psi) / std_psi
+
+# Data preparation
+train_size = 100000
+val_size = 20000  # Dedicated validation set size
+test_time = 1500
+
+lead = 1
+
+# Splitting indices
+train_end = train_size
+val_start = train_end
+val_end = val_start + val_size
+
+def reshape_data(data):
+    return data.reshape(-1, 75)
+
+# Training, validation, and test sets
+psi_input_Tr = reshape_data(psi[:train_end, :])
+psi_label_Tr = reshape_data(psi[:train_end, :])
+psi_input_val = reshape_data(psi[val_start:val_end, :])
+psi_label_val = reshape_data(psi[val_start + lead:val_end + lead, :])
+
+# Test set
+test_size = int(0.5 * psi.shape[0])
+psi_test_input = reshape_data(psi[val_end:val_end + test_size, :])
+psi_test_label = reshape_data(psi[val_end + lead:val_end + lead + test_size, :])
+
+noise_train = np.random.normal(psi_input_Tr)
+noise_val = np.random.normal(psi_input_val)
+noise_test = np.random.normal(psi_test_input)
+
+class AtmosphereDataset(torch.utils.data.Dataset):
+    def __init__(self, inputs, labels):
+
+        self.inputs = torch.tensor(inputs, dtype=torch.float32)
+        self.labels = torch.tensor(labels, dtype=torch.float32)
+        
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, idx):
+        return self.inputs[idx], self.labels[idx]
+    
+test_dataset = AtmosphereDataset(psi_test_input + noise_test, psi_test_label)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
 # Running everything 
 
-vae_with_loss = VariationalAutoencoder(latent_dims).to(device) # GPU
+cnn_with_loss = CNN().to(device) # GPU
 
 if not os.path.exists(model_weights_path):
-    vae_with_loss.load_state_dict(torch.load(model_weights_path, weights_only=True))
+    cnn_with_loss.load_state_dict(torch.load(model_weights_path, weights_only=True))
     print(f"Model weights loaded from {model_weights_path}.")
 else:
     print(f"No pre-trained weights found. Training model...")
     
     # Train model
-    vae_with_loss = train(vae_with_loss, train_loader, val_loader)
+    cnn_with_loss = train(cnn_with_loss, train_loader, val_loader)
 
-    torch.save(vae_with_loss.state_dict(), 'model_weights.pth')
+    torch.save(cnn_with_loss.state_dict(), 'model_weights.pth')
     print(f"Model weights saved to {model_weights_path}.")
 
     # Evaluate and plot results
-    predictions, ground_truth = evaluate_model(vae_with_loss, test_loader, std_psi, mean_psi)
+    predictions, ground_truth = evaluate_model(cnn_with_loss, test_loader, std_psi, mean_psi)
     plot_predictions(predictions, ground_truth)
     
     # Save predictions
