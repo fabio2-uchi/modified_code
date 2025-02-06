@@ -16,7 +16,7 @@ device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 torch.cuda.empty_cache()
 
 # Model setup
-model_weights_path = r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/100ep-jan10th/model_weights.weights.h5' 
+model_weights_path = r"/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/CNN_models" 
 
 # Load and preprocess data
 F = np.load(r'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/x_stoch.npy' )
@@ -28,8 +28,8 @@ std_psi = np.std(psi, axis=0, keepdims=True)
 psi = (psi - mean_psi) / std_psi
 
 # Data preparation
-train_size = 100000
-val_size = 20000  # Dedicated validation set size
+train_size = 200000
+val_size = 50000  # Dedicated validation set size
 test_time = 1500
 
 lead = 1
@@ -182,7 +182,7 @@ def evaluate_model(model, test_loader, std_psi, mean_psi):
     
     return predictions, ground_truth
 
-def plot_predictions(predictions, ground_truth, variable_idx=63):
+def plot_predictions(predictions, ground_truth, i, variable_idx=63):
     time_steps = range(len(ground_truth))
     
     plt.figure(figsize=(12, 6))
@@ -194,60 +194,8 @@ def plot_predictions(predictions, ground_truth, variable_idx=63):
     plt.title(f'One-Step-Ahead Predictions vs Ground Truth for Index {variable_idx}')
     plt.legend()
     plt.grid(True)
+    plt.savefig(f"{model_weights_path}/prediction_{i}.png")
     plt.show()
-
-psi = F[3500:, 1, :]
-
-# Normalize data
-mean_psi = np.mean(psi, axis=0, keepdims=True)
-std_psi = np.std(psi, axis=0, keepdims=True)
-psi = (psi - mean_psi) / std_psi
-
-# Data preparation
-train_size = 100000
-val_size = 20000  # Dedicated validation set size
-test_time = 1500
-
-lead = 1
-
-# Splitting indices
-train_end = train_size
-val_start = train_end
-val_end = val_start + val_size
-
-def reshape_data(data):
-    return data.reshape(-1, 75)
-
-# Training, validation, and test sets
-psi_input_Tr = reshape_data(psi[:train_end, :])
-psi_label_Tr = reshape_data(psi[:train_end, :])
-psi_input_val = reshape_data(psi[val_start:val_end, :])
-psi_label_val = reshape_data(psi[val_start + lead:val_end + lead, :])
-
-# Test set
-test_size = int(0.5 * psi.shape[0])
-psi_test_input = reshape_data(psi[val_end:val_end + test_size, :])
-psi_test_label = reshape_data(psi[val_end + lead:val_end + lead + test_size, :])
-
-noise_train = np.random.normal(psi_input_Tr)
-noise_val = np.random.normal(psi_input_val)
-noise_test = np.random.normal(psi_test_input)
-
-class AtmosphereDataset(torch.utils.data.Dataset):
-    def __init__(self, inputs, labels):
-
-        self.inputs = torch.tensor(inputs, dtype=torch.float32)
-        self.labels = torch.tensor(labels, dtype=torch.float32)
-        
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, idx):
-        return self.inputs[idx], self.labels[idx]
-    
-test_dataset = AtmosphereDataset(psi_test_input + noise_test, psi_test_label)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
-# Running everything 
 
 cnn_with_loss = CNN().to(device) # GPU
 
@@ -260,16 +208,52 @@ else:
     # Train model
     cnn_with_loss = train(cnn_with_loss, train_loader, val_loader)
 
-    torch.save(cnn_with_loss.state_dict(), 'model_weights.pth')
+    torch.save(cnn_with_loss.state_dict(), f'{model_weights_path}/model_weights.pth')
     print(f"Model weights saved to {model_weights_path}.")
+
+for i in range(1, 3):
+    F = np.load(f'/home/constantino-daniel-boscu/Documents/research/AI-RES/modified-code-main3/data/stochastic_trajectory{i}.npy' )
+    psi = F[3500:, 1, :]
+
+    # Normalize data
+    mean_psi = np.mean(psi, axis=0, keepdims=True)
+    std_psi = np.std(psi, axis=0, keepdims=True)
+    psi = (psi - mean_psi) / std_psi
+
+    lead = 1
+
+    def reshape_data(data):
+        return data.reshape(-1, 75)
+
+    # Test set
+    test_size = int(0.5 * psi.shape[0])
+    psi_test_input = reshape_data(psi[:-1,:])
+    psi_test_label = reshape_data(psi[lead:,:])
+    noise_test = np.random.normal(psi_test_input)
+
+    class AtmosphereDataset(torch.utils.data.Dataset):
+        def __init__(self, inputs, labels):
+
+            self.inputs = torch.tensor(inputs, dtype=torch.float32)
+            self.labels = torch.tensor(labels, dtype=torch.float32)
+            
+        def __len__(self):
+            return len(self.inputs)
+
+        def __getitem__(self, idx):
+            return self.inputs[idx], self.labels[idx]
+        
+    test_dataset = AtmosphereDataset(psi_test_input + noise_test, psi_test_label)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
+    # Running everything 
 
     # Evaluate and plot results
     predictions, ground_truth = evaluate_model(cnn_with_loss, test_loader, std_psi, mean_psi)
-    plot_predictions(predictions, ground_truth)
+    plot_predictions(predictions, ground_truth, i, variable_idx=63)
     
     # Save predictions
     np.savez(
-        "vae_predictions.npz",
+        f"{model_weights_path}/vae_predictions{i}.npz",
         predictions=predictions,
         ground_truth=ground_truth,
         mean_psi=mean_psi,
