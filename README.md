@@ -94,9 +94,9 @@ python analysis_latent.py
 ---
 
 ## Authors
-- **First Author:** [Your Name]  
+- **First Authors:** Daniel Hernandez, Fabio Alvarez-Venture, Constantino Daniel-Boscu
   Undergraduate Researcher, University of Chicago  
-- Supervised by: [Advisor’s Name]  
+- Supervised by: Dorian Abbot, Justin Finkel, Ashesh Chattopadhay, Pedram 
 
 ---
 
