@@ -14,8 +14,8 @@ Key contributions:
 ## Project Structure
 ```
 ├── model.py                # Conditional VAE model implementation
-├── train.py                # Training loop with KL annealing and logging
-├── inference.py            # Autoregressive inference pipeline
+├── train.ipynb                # Training loop with KL annealing and logging
+├── inference.ipynb            # Autoregressive inference pipeline
 ├── plots/
 │   ├── generate_plots/     # Code to reproduce paper figures
 │   │   ├── holton_mass.py              # Holton-Mass model (for one-step tests)
