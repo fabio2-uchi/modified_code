@@ -13,15 +13,26 @@ Key contributions:
 
 ## Project Structure
 ```
-├── train.py                # Training loop with KL annealing and logging
-├── inference.py            # Inference pipeline for stochastic/deterministic tests
 ├── model.py                # Conditional VAE model implementation
-├── analysis_latent.py      # PCA, clustering, and latent diagnostics
+├── train.py                # Training loop with KL annealing and logging
+├── inference.py            # Autoregressive inference pipeline
 ├── transitions.py          # Transition detection and statistics
-├── plots/                  # Figures for PCA, histograms, predictions
-├── save_folder/            # Model checkpoints and results
+├── analysis_latent.py      # PCA, clustering, and latent diagnostics
+├── plots/
+│   ├── generate_plots/     # Code to reproduce paper figures
+│   │   ├── holton_mass.py              # Holton-Mass model (for one-step tests)
+│   │   ├── double_one_step_test.ipynb  # Fig. 3: One-step RMSE vs altitude
+│   │   ├── rmse_calcs.ipynb            # Fig. 4: Forecast error growth by altitude
+│   │   ├── steady_state_density.ipynb  # Fig. 5: Steady-state density (U vs IHF)
+│   │   ├── timeseries_pdf.ipynb        # Fig. 2: Time series & PDF comparison
+│   │   ├── committor.ipynb             # Fig. 6: Committor function q+(x)
+│   │   ├── lead_time.ipynb             # Fig. 7: Expected lead time η+_B(x)
+│   │   ├── ccdf.ipynb                  # Fig. 8: CCDF of transition durations
+│   │   └── latent_pca.ipynb            # Fig. 9: Latent space PCA
+│   └── graphs_for_paper/   # Output PNGs for the paper
+├── save_folder/            # Model checkpoints
 ├── long_run_310k.npy       # Stratospheric training dataset (Holton–Mass simulation)
-└── README.md               # Project documentation
+└── README.md
 ```
 
 ---
