@@ -1,0 +1,36 @@
+# Data files (too large for git)
+*.npy
+*.npy.gz
+
+# Model checkpoints (keep directory structure, ignore contents)
+save_folder/*
+!save_folder/.gitkeep
+*.pth
+*.ckpt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Weights & Biases
+wandb/
+
+# Plots — track code and paper figures, ignore transient outputs
+# The plots/ subdirectories are tracked
+
