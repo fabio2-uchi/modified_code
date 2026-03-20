@@ -16,8 +16,6 @@ Key contributions:
 ├── model.py                # Conditional VAE model implementation
 ├── train.py                # Training loop with KL annealing and logging
 ├── inference.py            # Autoregressive inference pipeline
-├── transitions.py          # Transition detection and statistics
-├── analysis_latent.py      # PCA, clustering, and latent diagnostics
 ├── plots/
 │   ├── generate_plots/     # Code to reproduce paper figures
 │   │   ├── holton_mass.py              # Holton-Mass model (for one-step tests)
@@ -30,8 +28,6 @@ Key contributions:
 │   │   ├── ccdf.ipynb                  # Fig. 8: CCDF of transition durations
 │   │   └── latent_pca.ipynb            # Fig. 9: Latent space PCA
 │   └── graphs_for_paper/   # Output PNGs for the paper
-├── save_folder/            # Model checkpoints
-├── long_run_310k.npy       # Stratospheric training dataset (Holton–Mass simulation)
 └── README.md
 ```
 
