@@ -40,25 +40,6 @@ Key contributions:
 - PyTorch (CUDA recommended)
 - NumPy, SciPy, scikit-learn
 - Seaborn, Matplotlib
-- Weights & Biases (`wandb`)
-
-### Data
-Place `long_run_310k.npy` in the repository root (or set `HM_DATA_PATH` environment variable). This file contains a 3×10⁵-day simulation of the stochastic Holton-Mass model.
-
-### Training
-```bash
-python train.py
-```
-
-### Inference
-```bash
-python inference.py
-```
-
-### Latent Analysis
-```bash
-python analysis_latent.py
-```
 
 ---
 
